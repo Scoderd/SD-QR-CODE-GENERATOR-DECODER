@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ultimate QR Tool</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4">
+  <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-md">
+    <h1 class="text-2xl font-bold text-center text-blue-600 mb-6">Ultimate QR Code Tool</h1>
+
+    <!-- QR Type Selection -->
+    <div class="mb-4">
+      <label for="qrType" class="block font-medium mb-2">Select QR Code Type:</label>
+      <select id="qrType" onchange="toggleForm()" class="w-full p-2 border rounded-md">
+        <option value="text">Text</option>
+        <option value="vcard">Contact (vCard)</option>
+      </select>
+    </div>
+
+    <!-- Text Input -->
+    <div id="text-form" class="space-y-4">
+      <input type="text" id="text-input" placeholder="Enter text or URL" oninput="livePreview()" class="w-full p-2 border rounded-md" />
+    </div>
+
+    <!-- vCard Form -->
+    <div id="vcard-form" class="space-y-4 hidden">
+      <input type="text" id="name" placeholder="Full Name" oninput="livePreview()" class="w-full p-2 border rounded-md" />
+      <input type="text" id="org" placeholder="Organization" oninput="livePreview()" class="w-full p-2 border rounded-md" />
+      <input type="tel" id="phone" placeholder="Phone Number" oninput="livePreview()" class="w-full p-2 border rounded-md" />
+      <input type="email" id="email" placeholder="Email Address" oninput="livePreview()" class="w-full p-2 border rounded-md" />
+      <input type="text" id="address" placeholder="Address" oninput="livePreview()" class="w-full p-2 border rounded-md" />
+    </div>
+
+    <!-- Buttons -->
+    <div class="mt-4 space-y-3">
+      <button onclick="downloadQR()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">Download QR Code</button>
+    </div>
+
+    <!-- QR Code Display (smaller) -->
+    <div id="qr-container" class="flex justify-center my-6">
+      <!-- Canvas will be inserted here -->
+    </div>
+
+    <!-- Divider -->
+    <hr class="my-6">
+
+    <!-- Decode Section -->
+    <div class="space-y-4">
+      <h2 class="text-lg font-semibold text-center text-purple-600">Decode QR Code from Image</h2>
+      <input type="file" id="qr-image" accept="image/*" onchange="decodeQR()" class="w-full p-2 border rounded-md" />
+      
+      <!-- Progress Bar -->
+      <div id="progress-wrap" class="w-full bg-gray-200 rounded h-2">
+        <div id="progress-bar" class="bg-blue-500 h-2 rounded w-0 transition-all"></div>
+      </div>
+
+      <!-- Decoded Text Output (larger + detailed) -->
+      <div id="decoded-text" class="text-center mt-4 text-base text-gray-800 font-medium whitespace-pre-wrap break-words p-4 bg-gray-100 rounded border border-gray-300 shadow-sm hidden"></div>
+    </div>
+  </div>
+
+  <!-- QRCode.js -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <!-- jsQR for decoding -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+  <script>
+    let qr;
+
+    function toggleForm() {
+      const type = document.getElementById("qrType").value;
+      document.getElementById("text-form").classList.toggle("hidden", type !== "text");
+      document.getElementById("vcard-form").classList.toggle("hidden", type !== "vcard");
+      livePreview();
+    }
+
+    function generateVCard(name, org, phone, email, address) {
+      return `BEGIN:VCARD
+VERSION:3.0
+N:${name}
+ORG:${org}
+TEL:${phone}
+EMAIL:${email}
+ADR:${address}
+END:VCARD`;
+    }
+
+    function livePreview() {
+      const type = document.getElementById("qrType").value;
+      let data = "";
+
+      if (type === "text") {
+        data = document.getElementById("text-input").value.trim();
+      } else {
+        const name = document.getElementById("name").value.trim();
+        const org = document.getElementById("org").value.trim();
+        const phone = document.getElementById("phone").value.trim();
+        const email = document.getElementById("email").value.trim();
+        const address = document.getElementById("address").value.trim();
+        data = generateVCard(name, org, phone, email, address);
+      }
+
+      const container = document.getElementById("qr-container");
+      container.innerHTML = "";
+
+      if (data) {
+        qr = new QRCode(container, {
+          text: data,
+          width: 160, // Smaller size
+          height: 160,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      }
+    }
+
+    function downloadQR() {
+      const canvas = document.querySelector("#qr-container canvas");
+      if (!canvas) {
+        alert("Please generate a QR code first!");
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = "qr-code.png";
+      link.click();
+    }
+
+    function decodeQR() {
+      const fileInput = document.getElementById("qr-image");
+      const file = fileInput.files[0];
+      const progressWrap = document.getElementById("progress-wrap");
+      const progressBar = document.getElementById("progress-bar");
+      const output = document.getElementById("decoded-text");
+
+      output.classList.add("hidden");
+      output.textContent = "";
+      progressWrap.classList.remove("hidden");
+      progressBar.style.width = "0%";
+
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          // Animate progress bar
+          let i = 0;
+          const interval = setInterval(() => {
+            i += 10;
+            progressBar.style.width = i + "%";
+            if (i >= 90) clearInterval(interval);
+          }, 80);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+          setTimeout(() => {
+            progressBar.style.width = "100%";
+            progressWrap.classList.add("hidden"); // Hide after decode
+
+            if (code) {
+              output.textContent = `✅ QR Decoded:\n\n${code.data}`;
+              output.classList.remove("hidden");
+            } else {
+              output.textContent = "❌ No QR code found in the image.";
+              output.classList.remove("hidden");
+            }
+          }, 300);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Init QR preview on load
+    window.onload = livePreview;
+  </script>
+</body>
+</html>
